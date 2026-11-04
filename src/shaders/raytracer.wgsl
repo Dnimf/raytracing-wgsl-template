@@ -160,6 +160,10 @@ fn check_ray_collision(r: ray, max: f32) -> hit_record
   var meshCount = i32(uniforms[27]);
 
   var record = hit_record(RAY_TMAX, vec3f(0.0), vec3f(0.0), vec4f(0.0), vec4f(0.0), false, false);
+  for(var i: i32 = 0; i< spheresCount; i++){
+    let esfera = spheresb[i];
+    hit_sphere( esfera.transform.xyz, esfera.transform.w, r,&record, max);
+  }
   var closest = record;
 
   return closest;
@@ -198,7 +202,13 @@ fn trace(r: ray, rng_state: ptr<function, u32>) -> vec3f
 
   for (var j = 0; j < maxbounces; j = j + 1)
   {
-
+    var colisao = check_ray_collision(r_, RAY_TMAX);
+    if(colisao.hit_anything == true){
+      light = vec3f(1.,1.,0);
+    }
+    else{
+      light = vec3f(0.,0.,1.);
+    }
   }
 
   return light;
@@ -235,11 +245,18 @@ fn render(@builtin(global_invocation_id) id : vec3u)
 
     var color_out = vec4(linear_to_gamma(color), 1.0);
     var map_fb = mapfb(id.xy, rez);
-    
+    var a = 0;    
+
+    for(var i: i32 = 0; i< samples_per_pixel; i++){
+      let raio = get_ray(cam, uv, &rng_state);
+      let traco = trace(raio, &rng_state);
+      color = traco;
+      // a +=1;
+    }
     // 5. Accumulate the color
     var should_accumulate = uniforms[3];
 
     // Set the color to the framebuffer
-    rtfb[map_fb] = color_out;
-    fb[map_fb] = color_out;
+    rtfb[map_fb] = vec4(color,1.);
+    fb[map_fb] = vec4(color,1.);
 }
