@@ -159,10 +159,21 @@ fn check_ray_collision(r: ray, max: f32) -> hit_record
   var trianglesCount = i32(uniforms[22]);
   var meshCount = i32(uniforms[27]);
 
-  var record = hit_record(RAY_TMAX, vec3f(0.0), vec3f(0.0), vec4f(0.0), vec4f(0.0), false, false);
+  var record = hit_record(RAY_TMAX, vec3f(0.0), vec3f(0.0), vec4f(1.0), vec4f(0.0), false, false); // vec4 [e a cor]
+  var temp_record = hit_record(RAY_TMAX, vec3f(0.0), vec3f(0.0), vec4f(1.0), vec4f(0.0), false, false); // vec4 [e a cor]
+  var anterior = record.t;
   for(var i: i32 = 0; i< spheresCount; i++){
     let esfera = spheresb[i];
-    hit_sphere( esfera.transform.xyz, esfera.transform.w, r,&record, max);
+    hit_sphere( esfera.transform.xyz, esfera.transform.w, r,&temp_record, max);
+    if (temp_record.hit_anything == true){
+      if(temp_record.t<anterior){
+        temp_record.object_color = spheresb[i].color;
+        temp_record.object_material= spheresb[i].material;
+        anterior = temp_record.t;
+        record = temp_record;
+      }
+    }
+    // hit_box
   }
   var closest = record;
 
@@ -171,12 +182,20 @@ fn check_ray_collision(r: ray, max: f32) -> hit_record
 
 fn lambertian(normal : vec3f, absorption: f32, random_sphere: vec3f, rng_state: ptr<function, u32>) -> material_behaviour
 {
-  return material_behaviour(true, vec3f(0.0));
+  var ponto = rng_next_vec3_in_unit_sphere(rng_state);
+  ponto = ponto+normal+0.05;
+  return material_behaviour(true, normalize(ponto));
 }
 
-fn metal(normal : vec3f, direction: vec3f, fuzz: f32, random_sphere: vec3f) -> material_behaviour
+fn metal(normal : vec3f, direction: vec3f, fuzz: f32, rng_state: ptr<function, u32>) -> material_behaviour
 {
-  return material_behaviour(false, vec3f(0.0));
+  // var vn = dot(direction,normal);
+  // var r = v-2*vn;
+  var r = reflect(normalize(direction), normalize(normal));
+  var ponto = rng_next_vec3_in_unit_sphere(rng_state);
+  ponto = ponto+normal+0.05;
+  r += fuzz*ponto;
+  return material_behaviour(false, r);
 }
 
 fn dielectric(normal : vec3f, r_direction: vec3f, refraction_index: f32, frontface: bool, random_sphere: vec3f, fuzz: f32, rng_state: ptr<function, u32>) -> material_behaviour
@@ -204,10 +223,17 @@ fn trace(r: ray, rng_state: ptr<function, u32>) -> vec3f
   {
     var colisao = check_ray_collision(r_, RAY_TMAX);
     if(colisao.hit_anything == true){
-      light = vec3f(1.,1.,0);
+      color *= colisao.object_color.xyz;
+      var lamb = lambertian(colisao.normal, 0.0,vec3f(0.0), rng_state);
+      var metal = metal(colisao.normal,r_.direction,colisao.object_material[1],rng_state);
+      var direcao = normalize(mix(lamb.direction, metal.direction, colisao.object_material[0]));
+      r_.origin = colisao.p;
+      r_.direction = direcao;
     }
     else{
-      light = vec3f(0.,0.,1.);
+      // light += backgroundcolor1;
+      light +=envoriment_color(r_.direction, backgroundcolor1, backgroundcolor2)*color;
+      break;
     }
   }
 
@@ -235,28 +261,27 @@ fn render(@builtin(global_invocation_id) id : vec3u)
     var cam = get_camera(lookfrom, lookat, vec3(0.0, 1.0, 0.0), uniforms[10], 1.0, uniforms[6], uniforms[5]);
     var samples_per_pixel = i32(uniforms[4]);
 
-    var color = vec3(rng_next_float(&rng_state), rng_next_float(&rng_state), rng_next_float(&rng_state));
-
+    // var color = vec3(rng_next_float(&rng_state), rng_next_float(&rng_state), rng_next_float(&rng_state));
+    var color = vec3f(0.);
     // Steps:
     // 1. Loop for each sample per pixel
     // 2. Get ray
     // 3. Call trace function
     // 4. Average the color
 
-    var color_out = vec4(linear_to_gamma(color), 1.0);
     var map_fb = mapfb(id.xy, rez);
-    var a = 0;    
-
+    // var 
     for(var i: i32 = 0; i< samples_per_pixel; i++){
       let raio = get_ray(cam, uv, &rng_state);
       let traco = trace(raio, &rng_state);
-      color = traco;
-      // a +=1;
+      color += traco;
     }
     // 5. Accumulate the color
+    var color_out = vec4(linear_to_gamma(color/f32(samples_per_pixel)), 1.0);
     var should_accumulate = uniforms[3];
-
+    // var should_accumulate = color/vec3(a);
+    var acumulado = rtfb[map_fb]*should_accumulate +color_out;
     // Set the color to the framebuffer
-    rtfb[map_fb] = vec4(color,1.);
-    fb[map_fb] = vec4(color,1.);
+    rtfb[map_fb] = acumulado;
+    fb[map_fb] = (rtfb[map_fb]/rtfb[map_fb].w);
 }

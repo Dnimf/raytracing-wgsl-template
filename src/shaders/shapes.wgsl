@@ -5,20 +5,49 @@ fn hit_sphere(center: vec3f, radius: f32, r: ray, record: ptr<function, hit_reco
   var b = dot(r.direction,e);
   b = 2*b;
   var c = dot(e,e)-pow(radius, 2);
-  var delta = pow(b,2)-(d_quadrado*c);
+  var delta = pow(b,2)-4*(d_quadrado*c);
   
   // var normal = 
-  if (delta>=0){
+  if (delta<0){
       // var denom = dot(normal, r.direction);
       // var t = (D - dot(normal, r.origin)) / denom;
       // var intersection = ray_at(r, t);
-      record.hit_anything = true;
-      return;
-  }
-  else{
       record.hit_anything = false;
       return;
   }
+  if(delta == 0){
+    var t = -b/(2*d_quadrado);
+    if(t<RAY_TMIN ||t>RAY_TMAX){
+    // return false;
+    record.hit_anything = false;
+    return;
+    }
+    record.t = t;
+    var intersection = ray_at(r, t);
+    record.p = intersection;
+    record.normal = normalize(intersection-center);
+  
+  }
+  if(delta > 0){
+    var t1 = (-b+sqrt(delta))/(2*d_quadrado);
+    var t2 = (-b-sqrt(delta))/(2*d_quadrado);
+    var t = t1;
+    if(abs(t2)<abs(t1)){
+      t = t2;
+    }
+    if(t<RAY_TMIN ||t>RAY_TMAX){
+    // return false;
+    record.hit_anything = false;
+    return;
+    }
+    record.t = t;
+    var intersection = ray_at(r, t);
+    record.p = intersection;
+    record.normal = normalize(intersection-center);
+  }
+
+      record.hit_anything = true;
+      return;
 }
 
 fn hit_quad(r: ray, Q: vec4f, u: vec4f, v: vec4f, record: ptr<function, hit_record>, max: f32)
