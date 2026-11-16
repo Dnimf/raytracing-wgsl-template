@@ -159,21 +159,142 @@ fn check_ray_collision(r: ray, max: f32) -> hit_record
   var trianglesCount = i32(uniforms[22]);
   var meshCount = i32(uniforms[27]);
 
-  var record = hit_record(RAY_TMAX, vec3f(0.0), vec3f(0.0), vec4f(1.0), vec4f(0.0), false, false); // vec4 [e a cor]
-  var temp_record = hit_record(RAY_TMAX, vec3f(0.0), vec3f(0.0), vec4f(1.0), vec4f(0.0), false, false); // vec4 [e a cor]
+  var record = hit_record(RAY_TMAX, vec3f(0.0), vec3f(0.0), vec4f(1.0), vec4f(1.0), true, false); // vec4 [e a cor]
+  var temp_record = hit_record(RAY_TMAX, vec3f(0.0), vec3f(0.0), vec4f(1.0), vec4f(1.0), true, false); // vec4 [e a cor]
   var anterior = record.t;
-  for(var i: i32 = 0; i< spheresCount; i++){
+  if(spheresCount>0){
+    for(var i: i32 = 0; i< spheresCount; i++)
+  {
     let esfera = spheresb[i];
     hit_sphere( esfera.transform.xyz, esfera.transform.w, r,&temp_record, max);
-    if (temp_record.hit_anything == true){
-      if(temp_record.t<anterior){
-        temp_record.object_color = spheresb[i].color;
-        temp_record.object_material= spheresb[i].material;
-        anterior = temp_record.t;
-        record = temp_record;
-      }
+    if (!temp_record.hit_anything) 
+    {
+      continue;
     }
-    // hit_box
+
+    if(temp_record.t > anterior)
+    {
+      continue;
+    }
+    
+    if(spheresb[i].material[3] < 0.1){
+    temp_record.object_color = spheresb[i].color;
+    }
+    else
+    {
+      var temp = emmisive(spheresb[i].color.xyz, spheresb[i].material[3]);
+      temp_record.object_color = vec4f(temp.direction, temp_record.object_color.w);
+    }
+
+    temp_record.object_material= spheresb[i].material;
+    // temp_record.frontface= !temp_record.frontface;
+    anterior = temp_record.t;
+    record = temp_record;
+    // hit_boxc
+  }  
+  }
+  if(boxesCount>0){
+    for(var i: i32 = 0; i< boxesCount; i++)
+  {
+    let esfera = boxesb[i];
+    var rotacao = quaternion_from_euler(boxesb[i].rotation.xyz);
+    var raio = rotate_ray_quaternion(r, boxesb[i].center.xyz,rotacao);
+
+    hit_box(raio,  boxesb[i].center.xyz,  boxesb[i].radius.xyz,&temp_record,max);
+    // r = raio;
+    if (!temp_record.hit_anything) 
+    {
+      continue;
+    }
+
+    if(temp_record.t > anterior)
+    {
+      continue;
+    }
+    
+    if(boxesb[i].material[3] < 0.1){
+    temp_record.object_color = boxesb[i].color;
+    }
+    else
+    {
+      var temp = emmisive(boxesb[i].color.xyz, boxesb[i].material[3]);
+      temp_record.object_color = vec4f(temp.direction, temp_record.object_color.w);
+    }
+
+    temp_record.object_material= boxesb[i].material;
+    // temp_record.frontface= !temp_record.frontface;
+    anterior = temp_record.t;
+    record = temp_record;
+    // hit_boxc
+  }  
+  }
+
+  if(quadsCount>0){
+    for(var i: i32 = 0; i< quadsCount; i++)
+  {
+    let esfera = quadsb[i];
+    hit_quad(r,  quadsb[i].Q, quadsb[i].u, quadsb[i].v,&temp_record, max);
+    if (!temp_record.hit_anything) 
+    {
+      continue;
+    }
+
+    if(temp_record.t > anterior)
+    {
+      continue;
+    }
+    
+    if(quadsb[i].material[3] < 0.1){
+    temp_record.object_color = quadsb[i].color;
+    }
+    else
+    {
+      var temp = emmisive(quadsb[i].color.xyz, quadsb[i].material[3]);
+      temp_record.object_color = vec4f(temp.direction, temp_record.object_color.w);
+    }
+
+    temp_record.object_material= quadsb[i].material;
+    // temp_record.frontface= !temp_record.frontface;
+    anterior = temp_record.t;
+    record = temp_record;
+    // hit_boxc
+  }  
+  }
+  if(trianglesCount>0){
+    for(var j: i32 = 0; j< meshCount; j++)
+  {
+    for(var i: i32 = i32(meshb[j].start); i<i32(meshb[j].end);i++){
+    let triangulo = trianglesb[i];
+    var v0 = trianglesb[i].v0*meshb[j].scale+meshb[j].transform;
+    var v1 = trianglesb[i].v1*meshb[j].scale+meshb[j].transform;
+    var v2 = trianglesb[i].v2*meshb[j].scale+meshb[j].transform;
+    hit_triangle(r,  v0.xyz, v1.xyz, v2.xyz,&temp_record, max);
+    if (!temp_record.hit_anything) 
+    {
+      continue;
+    }
+
+    if(temp_record.t > anterior)
+    {
+      continue;
+    }
+    
+    if(meshb[j].material[3] < 0.1){
+    temp_record.object_color =meshb[j].color;
+    }
+    else
+    {
+      var temp = emmisive(meshb[j].color.xyz, meshb[j].material[3]);
+      temp_record.object_color = vec4f(temp.direction, temp_record.object_color.w);
+    }
+
+    temp_record.object_material= meshb[0].material;
+    temp_record.frontface= !temp_record.frontface;
+    anterior = temp_record.t;
+    record = temp_record;
+    // hit_boxc
+    }
+  }  
   }
   var closest = record;
 
@@ -192,20 +313,51 @@ fn metal(normal : vec3f, direction: vec3f, fuzz: f32, rng_state: ptr<function, u
   // var vn = dot(direction,normal);
   // var r = v-2*vn;
   var r = reflect(normalize(direction), normalize(normal));
+  if(fuzz >0.0){
   var ponto = rng_next_vec3_in_unit_sphere(rng_state);
-  ponto = ponto+normal+0.05;
+  ponto = ponto+normal;
   r += fuzz*ponto;
+  }
   return material_behaviour(false, r);
 }
 
 fn dielectric(normal : vec3f, r_direction: vec3f, refraction_index: f32, frontface: bool, random_sphere: vec3f, fuzz: f32, rng_state: ptr<function, u32>) -> material_behaviour
 {  
-  return material_behaviour(false, vec3f(0.0));
+  var n = 0.;
+  if(frontface){
+    n = 1./refraction_index;
+  }
+  else{
+    n = refraction_index;
+  }
+  var rn = dot(-1.*r_direction,normal);
+  var cos = min(rn,1.);
+  // var cos = rn;
+  var r0 = (1-n)/(1+n);
+  r0 = r0*r0;
+  var r1 = r0+(1-r0)*pow((1.-cos),5.);
+
+  var seno = 1.-(cos*cos);
+  seno = sqrt(seno);
+  if((n*seno)>1. || r1>rng_next_float(rng_state)){
+  var r = reflect(normalize(r_direction), normalize(normal));
+  return material_behaviour(false, normalize(r));
+  }
+  else{
+  var rnn = cos*normal;
+  rnn = r_direction+rnn;
+  var r_p = (n)*rnn;
+  var raiz = 1.-(length(r_p)*length(r_p));
+  var r_II = -1.*max(sqrt(raiz),0.)*normal;
+  var r = r_p+r_II;
+  return material_behaviour(false, normalize(r));
+  }
 }
 
 fn emmisive(color: vec3f, light: f32) -> material_behaviour
 {
-  return material_behaviour(false, vec3f(0.0));
+
+  return material_behaviour(false, color*light);
 }
 
 fn trace(r: ray, rng_state: ptr<function, u32>) -> vec3f
@@ -223,12 +375,25 @@ fn trace(r: ray, rng_state: ptr<function, u32>) -> vec3f
   {
     var colisao = check_ray_collision(r_, RAY_TMAX);
     if(colisao.hit_anything == true){
+      // colisao.object_color.xyz = emmisive();
+      if (colisao.object_material[3] > 0.1)
+      {
+        light += colisao.object_color.xyz * color;
+        break;
+      }
       color *= colisao.object_color.xyz;
-      var lamb = lambertian(colisao.normal, 0.0,vec3f(0.0), rng_state);
+      // if(colisao.object_material[0]>0){
+      var lamb = lambertian(colisao.normal, colisao.object_material[1],vec3f(0.0), rng_state);
       var metal = metal(colisao.normal,r_.direction,colisao.object_material[1],rng_state);
-      var direcao = normalize(mix(lamb.direction, metal.direction, colisao.object_material[0]));
-      r_.origin = colisao.p;
-      r_.direction = direcao;
+      var direcao = normalize(mix(lamb.direction, metal.direction, colisao.object_material[2]));
+      if (colisao.object_material[0]<0){
+        var trans = dielectric(colisao.normal, r_.direction,colisao.object_material[2],colisao.frontface, vec3f(0.),0., rng_state);
+        // direcao = normalize(mix(direcao,trans.direction,colisao.object_material[1]));
+        direcao = trans.direction;
+      }
+        r_.origin = colisao.p+direcao*0.001;
+        r_.direction = direcao;
+      // }
     }
     else{
       // light += backgroundcolor1;
