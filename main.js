@@ -1,5 +1,5 @@
 import { getGPU, getCanvas, getComputeBuffer, getComputeBufferLayout, getModule, getRenderPipeline, RGBToInt, timer, RGBToHex, crateAllScenesList } from "./src/util.js";
-import { Sphere, Quad, Box, Triangle, Mesh } from "./src/objects.js";
+import { Sphere, Quad, Box, Triangle, Mesh, Cylinder } from "./src/objects.js";
 import { getAvailableScene } from "./src/scenes.js";
 
 // arrays
@@ -8,6 +8,7 @@ let quads = [];
 let boxes = [];
 let triangles = [];
 let meshes = [];
+let cylinders = [];
 
 // variables and constants
 const THREAD_COUNT = 16;
@@ -15,6 +16,7 @@ const MAX_SPHERES = 70;
 const MAX_QUADS = 10;
 const MAX_BOXES = 20;
 const MAX_TRIANGLES = 1000;
+const MAX_CILINDERS = 20;
 const MAX_MESHES = 3;
 
 let sphereTemplate = new Sphere([0.0, 0.1, -1.5], [0.4, 0.9, 0.8], 0.5, [0.0, 0.0, 0.0, 0.0]);
@@ -58,9 +60,8 @@ const uniforms = {
     lookatz: -4, // 25
     debugShowLookAt: 0, // 26
     meshCount: meshes.length, // 27
+    cylindersCount: cylinders.length,
 }
-
-const uniformsCount = Object.keys(uniforms).length;
 
 // get the GPU and canvas
 const { adapter, gpu } = await getGPU();
@@ -74,8 +75,8 @@ const frameBuffer = await getComputeBuffer(gpu, frameBufferSize, GPUBufferUsage.
 const rayTraceFrameBufferSize = sizes.vec4 * uniforms.rez ** 2;
 const rayTraceFrameBuffer = await getComputeBuffer(gpu, rayTraceFrameBufferSize, GPUBufferUsage.STORAGE);
 
-const uniformsBufferSize = sizes.f32 * uniformsCount;
-const uniformsBuffer = await getComputeBuffer(gpu, uniformsBufferSize, GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE);
+const uniformsBufferSize = 8 * sizes.vec4;
+const uniformsBuffer = await getComputeBuffer(gpu, 8 * sizes.vec4, GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM);
 
 const spheresBufferSize = (sizes.vec4 * 3) * MAX_SPHERES;
 const spheresBuffer = await getComputeBuffer(gpu, spheresBufferSize, GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE);
@@ -92,10 +93,13 @@ const trianglesBuffer = await getComputeBuffer(gpu, trianglesBufferSize, GPUBuff
 const meshesBufferSize = (sizes.vec4 * 7 + 3 * sizes.f32) * MAX_MESHES;
 const meshesBuffer = await getComputeBuffer(gpu, meshesBufferSize, GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE);
 
+const cylindersBufferSize = (sizes.vec4 * 5) * MAX_CILINDERS;
+const cylindersBuffer = await getComputeBuffer(gpu, cylindersBufferSize, GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE);
+
 const frameBuffers = [{ buffer: frameBuffer, type: "storage" }, { buffer: rayTraceFrameBuffer, type: "storage" }];
 const { bindGroupLayout: frameBuffersLayout, bindGroup: frameBuffersBindGroup } = await getComputeBufferLayout(gpu, frameBuffers);
 
-const uniformBuffers = [{ buffer: uniformsBuffer, type: "storage" }];
+const uniformBuffers = [{ buffer: uniformsBuffer, type: "uniform" }];
 const { bindGroupLayout: uniformsLayout, bindGroup: uniformsBindGroup } = await getComputeBufferLayout(gpu, uniformBuffers);
 
 const objectBuffers = [
@@ -103,7 +107,8 @@ const objectBuffers = [
     { buffer: quadsBuffer, type: "storage" }, 
     { buffer: boxesBuffer, type: "storage" }, 
     { buffer: trianglesBuffer, type: "storage" }, 
-    { buffer: meshesBuffer, type: "storage" }
+    { buffer: meshesBuffer, type: "storage" },
+    { buffer: cylindersBuffer, type: "storage" }
 ];
 
 // bind group layout
@@ -412,7 +417,7 @@ async function getScene(index)
 {
     let bg1, bg2, focusDistance, focusAngle, sunIntensity, samplesPerPixel, maxBounces;
     ({spheres : spheres, quads : quads, boxes : boxes, 
-        triangles: triangles, meshes: meshes, backgroundColor1 : bg1, 
+        triangles: triangles, meshes: meshes,cilinders: cylinders =[],  backgroundColor1 : bg1, 
         backgroundColor2 : bg2, focusDistance: focusDistance, focusAngle: 
         focusAngle, sunIntensity: sunIntensity, samplesPerPixel: samplesPerPixel, maxBounces: maxBounces} = await getAvailableScene(index, availableScenes));
     
@@ -447,7 +452,7 @@ function writeUniforms()
     uniforms.boxCount = boxes.length;
     uniforms.trianglesCount = triangles.length;
     uniforms.meshCount = meshes.length;
-    
+    uniforms.cylindersCount = cylinders.length;
     var uniformData = new Float32Array(uniformsBufferSize / sizes.f32);
     var offset = 0;
 
@@ -513,6 +518,7 @@ function writeBuffers()
 
     // triangles
     writeBuffer(trianglesBuffer, trianglesBufferSize, triangles);
+    writeBuffer(cylindersBuffer, cylindersBufferSize, cylinders);
 }
 
 // render framebuffer to quad

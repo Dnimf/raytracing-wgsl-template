@@ -66,6 +66,27 @@ class Triangle
     }
 }
 
+class Cylinder
+{
+    name = "Cylinder";
+    center = [0.0, 0.0, 0.0, 0.0];   // xyz = centro, w = raio
+    axis = [0.0, 0.0, 0.0, 0.0];     // xyz = eixo (normalizado), w = altura total
+    rotation = [0.0, 0.0, 0.0, 0.0]; // euler (radianos), opcional
+    color = [0.0, 0.0, 0.0, 0.0];
+    material = [0.0, 0.0, 0.0, 0.0];
+
+    constructor(center, color, radius, height, rotation, material)
+    {
+        this.center = [center[0], center[1], center[2], radius];
+        // eixo local fixo em Y; a rotação é quem orienta o cilindro
+        this.axis = [0.0, 1.0, 0.0, height];
+        this.rotation = [rotation[0], rotation[1], rotation[2], 0.0];
+        this.color = [color[0], color[1], color[2], 1.0];
+        this.material = material;
+    }
+}
+
+
 class Mesh
 {
     name = "Mesh";
@@ -99,4 +120,4 @@ class Mesh
     }
 }
 
-export { Sphere, Quad, Box, Triangle, Mesh };
+export { Sphere, Quad, Box, Triangle, Mesh, Cylinder };

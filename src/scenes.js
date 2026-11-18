@@ -1,4 +1,4 @@
-import { Sphere, Quad, Box, Mesh } from './objects.js';
+import { Sphere, Quad, Box, Mesh, Cylinder } from './objects.js';
 import { loadMesh, getObjBoundingBox, getSpheresRandom } from './util.js';
 
 const groundDefault = new Sphere([0, -1001, 0], [0.7, 0.7, 0.7], 1000, [0.9, 0.0, 0.6, 0.0]);
@@ -505,5 +505,76 @@ async function Everything()
         maxBounces: 10.0
     };
 }
+
+
+
+async function teste()
+{
+    let spheres = [
+        new Sphere([0, -1001, 0], [0.5, 0.5, 0.5], 1000, [1.0, 0.0, 1.0, 0.0]),
+        new Sphere([-0.0, -0.5, -2.0], [1.0, .0, .0], 0.5, [1.0, 0.0, 1., 0.0]),
+        new Sphere([-1., -0.5, -2.0], [.0, 1.0, .0], 0.5, [0.5, 0.0, 0.0, 0.0]),
+        new Sphere([1.0, -0.5, -2.0], [.0, .0, 1.0], 0.5, [0.0, 0.0, 0.0, 0.0]),
+        new Sphere([1.0, 0.5, -2.], [.0, 1.0, 1.0], 0.5, [0.3, 0.0, 0.0, 0.0]),
+        new Sphere([.0, 0.5, -2.], [1.0, 1.0, 1.0], 0.5, [0.5, 0.0, 1.0, 1.0]),
+        new Sphere([-1.0, 0.5, -2.], [1.0, .0, 1.0], 0.5, [0.0, 0.0, 0.7, 0.0]),
+		new Sphere([1.0, 1.5, -2.], [1.0, 1.0, .0], 0.5, [0.0, 0.3, 0.0, 0.0]),
+        new Sphere([.0, 1.5, -2.], [.0, .5, 1.0], 0.5, [0.0, 0.0, 1., 0.0]),
+        new Sphere([-1.0, 1.5, -2.], [.2, 5.0, .5], 0.5, [0.0, 0.0, 1., 0.0]),
+    ];
+	let quads = [
+
+		new Quad([-1.5, -1, 0, 0], [0, 0, -2, 0], [0, 2, 0, 0], [1, 1, 1, 1], [1, 0.005, 1, 0]), 
+	];
+    return {
+        spheres, 
+        quads, 
+        boxes: [], 
+        triangles: [], 
+        meshes: [], 
+        backgroundColor1: [0.0, 0.5, 1.0], 
+        backgroundColor2: [1.0, 1.0, 1.0],
+        focusDistance: 5.0, 
+        focusAngle: 0.0,
+        sunIntensity: 1.0,
+        samplesPerPixel: 1.0,
+        maxBounces: 10.0
+    };
+}
+
+async function teste_2()
+{
+    let spheres = [
+        new Sphere([0, -1001, 0], [0.5, 0.5, 0.5], 1000, [0.0, 0.0, 0.0, 0.0]),
+        // new Sphere([-0.0, -0.5, -2.0], [1.0, 0.0, 0.0], 0.5, [0.0, 0.0, 0.0, 0.0]),
+    ];
+
+	let cilinders = [
+        new Cylinder(            [0.0, -0.5, -2.0],      // center
+            [1.0, 0.0, 0.0],        // color (RGB)
+            0.4,                    // radius
+            1.0,                    // height
+            [0.0, 0.0, 0.0],        // rotation (euler, radianos)
+            [0.0, 0.0, 0.0, 0.0])
+    ];
+
+    return {
+        spheres, 
+		cilinders,
+        quads: [], 
+        boxes: [], 
+        triangles: [], 
+        meshes: [], 
+        backgroundColor1: [0.0, 0.5, 1.0], 
+        backgroundColor2: [1.0, 1.0, 1.0],
+        focusDistance: 5.0, 
+        focusAngle: 0.0,
+        sunIntensity: 1.0,
+        samplesPerPixel: 1.0,
+        maxBounces: 10.0
+    };
+}
+
+
 
 export { getAvailableScene };

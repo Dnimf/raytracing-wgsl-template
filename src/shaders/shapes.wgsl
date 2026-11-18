@@ -7,11 +7,7 @@ fn hit_sphere(center: vec3f, radius: f32, r: ray, record: ptr<function, hit_reco
   var c = dot(e,e)-(radius*radius);
   var delta = (b*b)-4*(d_quadrado*c);
   var normal = vec3f(0.);
-  // var normal = 
   if (delta<0){
-      // var denom = dot(normal, r.direction);
-      // var t = (D - dot(normal, r.origin)) / denom;
-      // var intersection = ray_at(r, t);
       record.hit_anything = false;
       return;
   }
@@ -171,4 +167,64 @@ fn hit_box(r: ray, center: vec3f, rad: vec3f, record: ptr<function, hit_record>,
   record.hit_anything = true;
 
   return;
+}
+
+
+fn hit_cilinder(r: ray, center: vec3f, rad:f32, height:f32, record: ptr<function, hit_record>, t_max: f32)
+{
+  var o = r.origin-center;
+  var a = (r.direction.x*r.direction.x)+(r.direction.z*r.direction.z);
+  var b = 2*(o.x*r.direction.x +o.z*r.direction.z);
+  var c = (o.x*o.x)+(o.z*o.z)-(rad*rad);
+  var delta = (b*b)-4*a*c;
+  var normal = vec3f(0.);
+  if (delta<0){
+      record.hit_anything = false;
+      return;
+  }
+  if(delta == 0){
+    var t = -b/(2*a);
+    if(t<RAY_TMIN ||t>t_max){
+    record.hit_anything = false;
+    return;
+    }
+    record.t = t;
+    var intersection = ray_at(r, t);
+    record.p = intersection;
+    normal = normalize(intersection-center);
+  
+  }
+  if(delta > 0){
+    var t1 = (-b+sqrt(delta))/(2*a);
+    var t2 = (-b-sqrt(delta))/(2*a);
+    var t = t2;
+    if(t2<RAY_TMIN || t2>t_max){
+      if(t1<RAY_TMIN || t1>t_max){
+        record.hit_anything = false;
+        return; 
+      }
+        t = t1;
+    }
+    var intersection = ray_at(r, t);
+    if(intersection.y > center.y+height || intersection.y <center.y){
+        record.hit_anything = false;
+        return;
+    }
+    record.t = t;
+
+    record.p = intersection;
+    normal = normalize(intersection-center);
+  }
+      if(dot(normalize(r.direction),normal)<0.){
+      record.frontface =true;
+      record.normal = normal;
+
+    }
+    else{
+      record.frontface = false;
+      record.normal = -normal;
+
+    }
+      record.hit_anything = true;
+      return;
 }

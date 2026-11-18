@@ -11,8 +11,16 @@ const FRAC_2_PI = 1.5707964f;
 @group(0) @binding(1)
   var<storage, read_write> rtfb : array<vec4f>;
 
+struct UniformData {
+  values : array<vec4f, 8>,
+};
+
 @group(1) @binding(0)
-  var<storage, read_write> uniforms : array<f32>;
+  var<uniform> uniforms : UniformData;
+
+fn get_uniform(index : u32) -> f32 {
+  return uniforms.values[index / 4u][index % 4u];
+}
 
 @group(2) @binding(0)
   var<storage, read_write> spheresb : array<sphere>;
@@ -29,6 +37,8 @@ const FRAC_2_PI = 1.5707964f;
 @group(2) @binding(4)
   var<storage, read_write> meshb : array<mesh>;
 
+@group(2) @binding(5)
+  var<storage, read_write> cilindersb : array<cilindro>;
 struct ray {
   origin : vec3f,
   direction : vec3f,
@@ -52,6 +62,14 @@ struct box {
   center : vec4f,
   radius : vec4f,
   rotation: vec4f,
+  color : vec4f,
+  material : vec4f,
+};
+
+struct cilindro {
+  center : vec4f,
+  axis : vec4f,
+  rotation : vec4f,
   color : vec4f,
   material : vec4f,
 };
@@ -140,10 +158,10 @@ fn envoriment_color(direction: vec3f, color1: vec3f, color2: vec3f) -> vec3f
   var t = 0.5 * (unit_direction.y + 1.0);
   var col = (1.0 - t) * color1 + t * color2;
 
-  var sun_direction = normalize(vec3(uniforms[13], uniforms[14], uniforms[15]));
-  var sun_color = int_to_rgb(i32(uniforms[17]));
-  var sun_intensity = uniforms[16];
-  var sun_size = uniforms[18];
+  var sun_direction = normalize(vec3(get_uniform(13u), get_uniform(14u), get_uniform(15u)));
+  var sun_color = int_to_rgb(i32(get_uniform(17u)));
+  var sun_intensity = get_uniform(16u);
+  var sun_size = get_uniform(18u);
 
   var sun = clamp(dot(sun_direction, unit_direction), 0.0, 1.0);
   col += sun_color * max(0, (pow(sun, sun_size) * sun_intensity));
@@ -153,11 +171,12 @@ fn envoriment_color(direction: vec3f, color1: vec3f, color2: vec3f) -> vec3f
 
 fn check_ray_collision(r: ray, max: f32) -> hit_record
 {
-  var spheresCount = i32(uniforms[19]);
-  var quadsCount = i32(uniforms[20]);
-  var boxesCount = i32(uniforms[21]);
-  var trianglesCount = i32(uniforms[22]);
-  var meshCount = i32(uniforms[27]);
+  var spheresCount = i32(get_uniform(19u));
+  var quadsCount = i32(get_uniform(20u));
+  var boxesCount = i32(get_uniform(21u));
+  var trianglesCount = i32(get_uniform(22u));
+  var meshCount = i32(get_uniform(27u));
+  var cilinderCount = i32(get_uniform(28u));
 
   var record = hit_record(RAY_TMAX, vec3f(0.0), vec3f(0.0), vec4f(1.0), vec4f(1.0), true, false); // vec4 [e a cor]
   var temp_record = hit_record(RAY_TMAX, vec3f(0.0), vec3f(0.0), vec4f(1.0), vec4f(1.0), true, false); // vec4 [e a cor]
@@ -198,9 +217,12 @@ fn check_ray_collision(r: ray, max: f32) -> hit_record
   {
     let esfera = boxesb[i];
     var rotacao = quaternion_from_euler(boxesb[i].rotation.xyz);
-    var raio = rotate_ray_quaternion(r, boxesb[i].center.xyz,rotacao);
+    var q_inv =  q_conjugate(rotacao);
+    var raio = rotate_ray_quaternion(r, boxesb[i].center.xyz,q_inv);
 
     hit_box(raio,  boxesb[i].center.xyz,  boxesb[i].radius.xyz,&temp_record,max);
+    temp_record.p = ray_at(r,temp_record.t);
+    temp_record.normal = normalize(rotate_vector(temp_record.normal, rotacao));
     // r = raio;
     if (!temp_record.hit_anything) 
     {
@@ -222,6 +244,45 @@ fn check_ray_collision(r: ray, max: f32) -> hit_record
     }
 
     temp_record.object_material= boxesb[i].material;
+    // temp_record.frontface= !temp_record.frontface;
+    anterior = temp_record.t;
+    record = temp_record;
+    // hit_boxc
+  }  
+  }
+
+  if(cilinderCount>0){
+    for(var i: i32 = 0; i< cilinderCount; i++)
+  {
+    let esfera = cilindersb[i];
+    // var rotacao = quaternion_from_euler(boxesb[i].rotation.xyz);
+    // var q_inv =  q_conjugate(rotacao);
+    // var raio = rotate_ray_quaternion(r, boxesb[i].center.xyz,q_inv);
+
+    hit_cilinder(r,cilindersb[i].center.xyz, cilindersb[i].center.w,cilindersb[i].axis.w, &temp_record, max);
+    // temp_record.p = ray_at(r,temp_record.t);
+    // temp_record.normal = normalize(rotate_vector(temp_record.normal, rotacao));
+    // r = raio;
+    if (!temp_record.hit_anything) 
+    {
+      continue;
+    }
+
+    if(temp_record.t > anterior)
+    {
+      continue;
+    }
+    
+    if(cilindersb[i].material[3] < 0.1){
+    temp_record.object_color = cilindersb[i].color;
+    }
+    else
+    {
+      var temp = emmisive(cilindersb[i].color.xyz, cilindersb[i].material[3]);
+      temp_record.object_color = vec4f(temp.direction, temp_record.object_color.w);
+    }
+
+    temp_record.object_material= cilindersb[i].material;
     // temp_record.frontface= !temp_record.frontface;
     anterior = temp_record.t;
     record = temp_record;
@@ -264,11 +325,17 @@ fn check_ray_collision(r: ray, max: f32) -> hit_record
     for(var j: i32 = 0; j< meshCount; j++)
   {
     for(var i: i32 = i32(meshb[j].start); i<i32(meshb[j].end);i++){
+    let q = quaternion_from_euler(meshb[j].rotation.xyz);
+    var q_inv =  q_conjugate(q);
+
     let triangulo = trianglesb[i];
-    var v0 = trianglesb[i].v0*meshb[j].scale+meshb[j].transform;
-    var v1 = trianglesb[i].v1*meshb[j].scale+meshb[j].transform;
-    var v2 = trianglesb[i].v2*meshb[j].scale+meshb[j].transform;
-    hit_triangle(r,  v0.xyz, v1.xyz, v2.xyz,&temp_record, max);
+    // var rotacao = quaternion_from_euler(meshb[j].rotation.xyz);
+    // var centro = meshb[j].max-meshb[j].min;
+    // var raio = rotate_ray_quaternion(r, centro.xyz,rotacao);
+    var v0 = rotate_vector((trianglesb[i].v0*meshb[j].scale).xyz,q_inv)+meshb[j].transform.xyz;
+    var v1 = rotate_vector((trianglesb[i].v1*meshb[j].scale).xyz,q_inv)+meshb[j].transform.xyz;
+    var v2 = rotate_vector((trianglesb[i].v2*meshb[j].scale).xyz,q_inv)+meshb[j].transform.xyz;
+    hit_triangle(r,  v0, v1, v2,&temp_record, max);
     if (!temp_record.hit_anything) 
     {
       continue;
@@ -304,7 +371,7 @@ fn check_ray_collision(r: ray, max: f32) -> hit_record
 fn lambertian(normal : vec3f, absorption: f32, random_sphere: vec3f, rng_state: ptr<function, u32>) -> material_behaviour
 {
   var ponto = rng_next_vec3_in_unit_sphere(rng_state);
-  ponto = ponto+normal+0.05;
+  ponto = ponto+normal;
   return material_behaviour(true, normalize(ponto));
 }
 
@@ -362,13 +429,13 @@ fn emmisive(color: vec3f, light: f32) -> material_behaviour
 
 fn trace(r: ray, rng_state: ptr<function, u32>) -> vec3f
 {
-  var maxbounces = i32(uniforms[2]);
+  var maxbounces = i32(get_uniform(2u));
   var light = vec3f(0.0);
   var color = vec3f(1.0);
   var r_ = r;
   
-  var backgroundcolor1 = int_to_rgb(i32(uniforms[11]));
-  var backgroundcolor2 = int_to_rgb(i32(uniforms[12]));
+  var backgroundcolor1 = int_to_rgb(i32(get_uniform(11u)));
+  var backgroundcolor2 = int_to_rgb(i32(get_uniform(12u)));
   var behaviour = material_behaviour(true, vec3f(0.0));
 
   for (var j = 0; j < maxbounces; j = j + 1)
@@ -385,8 +452,11 @@ fn trace(r: ray, rng_state: ptr<function, u32>) -> vec3f
       // if(colisao.object_material[0]>0){
       var lamb = lambertian(colisao.normal, colisao.object_material[1],vec3f(0.0), rng_state);
       var metal = metal(colisao.normal,r_.direction,colisao.object_material[1],rng_state);
-      var direcao = normalize(mix(lamb.direction, metal.direction, colisao.object_material[2]));
-      if (colisao.object_material[0]<0){
+      var direcao = normalize(mix(lamb.direction, metal.direction, colisao.object_material[0]));
+      if(colisao.object_material[2]<=rng_next_float(rng_state)){
+        direcao = lamb.direction;
+      }
+      if (colisao.object_material[0]<0.){
         var trans = dielectric(colisao.normal, r_.direction,colisao.object_material[2],colisao.frontface, vec3f(0.),0., rng_state);
         // direcao = normalize(mix(direcao,trans.direction,colisao.object_material[1]));
         direcao = trans.direction;
@@ -408,8 +478,8 @@ fn trace(r: ray, rng_state: ptr<function, u32>) -> vec3f
 @compute @workgroup_size(THREAD_COUNT, THREAD_COUNT, 1)
 fn render(@builtin(global_invocation_id) id : vec3u)
 {
-    var rez = uniforms[1];
-    var time = u32(uniforms[0]);
+    var rez = get_uniform(1u);
+    var time = u32(get_uniform(0u));
 
     // init_rng (random number generator) we pass the pixel position, resolution and frame
     var rng_state = init_rng(vec2(id.x, id.y), vec2(u32(rez)), time);
@@ -419,12 +489,12 @@ fn render(@builtin(global_invocation_id) id : vec3u)
     var uv = (fragCoord + sample_square(&rng_state)) / vec2(rez);
 
     // Camera
-    var lookfrom = vec3(uniforms[7], uniforms[8], uniforms[9]);
-    var lookat = vec3(uniforms[23], uniforms[24], uniforms[25]);
+    var lookfrom = vec3(get_uniform(7u), get_uniform(8u), get_uniform(9u));
+    var lookat = vec3(get_uniform(23u), get_uniform(24u), get_uniform(25u));
 
     // Get camera
-    var cam = get_camera(lookfrom, lookat, vec3(0.0, 1.0, 0.0), uniforms[10], 1.0, uniforms[6], uniforms[5]);
-    var samples_per_pixel = i32(uniforms[4]);
+    var cam = get_camera(lookfrom, lookat, vec3(0.0, 1.0, 0.0), get_uniform(10u), 1.0, get_uniform(6u), get_uniform(5u));
+    var samples_per_pixel = i32(get_uniform(4u));
 
     // var color = vec3(rng_next_float(&rng_state), rng_next_float(&rng_state), rng_next_float(&rng_state));
     var color = vec3f(0.);
@@ -443,7 +513,7 @@ fn render(@builtin(global_invocation_id) id : vec3u)
     }
     // 5. Accumulate the color
     var color_out = vec4(linear_to_gamma(color/f32(samples_per_pixel)), 1.0);
-    var should_accumulate = uniforms[3];
+    var should_accumulate = get_uniform(3u);
     // var should_accumulate = color/vec3(a);
     var acumulado = rtfb[map_fb]*should_accumulate +color_out;
     // Set the color to the framebuffer
